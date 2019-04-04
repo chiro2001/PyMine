@@ -4,6 +4,8 @@ import random
 import numpy as np
 import queue
 import copy
+import time
+import threading
 
 from ctypes import windll, byref, create_unicode_buffer, create_string_buffer
 FR_PRIVATE = 0x10
@@ -117,16 +119,17 @@ class Mine:
     def win(self):
         for x in range(self.w):
             for y in range(self.h):
-                if self.map[x][y] == -1 and self.dis[x][y] is False:
+                if self.map[x][y] != -1 and self.dis[x][y] is False:
                     return False
         return True
 
+
 class MineUi:
-    def __init__(self, w=10, h=10, n=10):
+    def __init__(self, root, w=10, h=10, n=10):
         self.h, self.w, self.n = w, h, n
         self.mine = Mine(w, h, n)
 
-        self.root = Tk()
+        self.root = root
         self.root.resizable(width=False, height=False)
         # self.root.attributes("-toolwindow", 1)
         self.root.title("PyMine - 扫雷")
@@ -144,8 +147,11 @@ class MineUi:
         self.var_face = StringVar()
         self.var_num.set("%03d" % self.n)
         self.var_time.set("000")
-        self.var_face.set("J")
+        self.var_face.set("K")
         self.win = None
+        self.stated = False
+        self.time = 0
+        self.thread = None
 
         self.CODE_MINE = '۞'
         self.CODE_BLANK = ''
@@ -160,10 +166,10 @@ class MineUi:
 
         self.signs = [[False for i in range(self.w)] for j in range(self.h)]
 
-        # 笑脸J， 哭脸L
+        # 笑脸J， 哭脸L，面瘫脸K
         self.font_face = tkFont.Font(family='Wingdings', size=15, weight=tkFont.NORMAL)
         self.font_num = tkFont.Font(family='5x5 Dots', size=24, weight=tkFont.NORMAL)
-        self.font_unit = tkFont.Font(family='Consolas', size=12, weight=tkFont.NORMAL)
+        self.font_unit = tkFont.Font(family='Consolas', size=9, weight=tkFont.NORMAL)
 
         Label(self.root, textvariable=self.var_time, font=self.font_num).grid(row=0, column=0)
         Button(self.root, textvariable=self.var_face, font=self.font_face, command=self.restart).grid(row=0, column=1)
@@ -193,6 +199,52 @@ class MineUi:
 
         self.refresh()
 
+    def init_data(self):
+        self.mine = Mine(self.w, self.h, self.n)
+
+        self.var_num.set("%03d" % self.n)
+        self.var_time.set("000")
+        self.var_face.set("K")
+        self.win = None
+        self.stated = False
+        self.time = 0
+        self.thread = None
+
+        for x in self.buttons:
+            for y in x:
+                y.grid_forget()
+
+        self.vars = [[StringVar() for i in range(self.w)] for j in range(self.h)]
+        self.buttons = [[None for i in range(self.w)] for j in range(self.h)]
+        self.units = [[MineUnit(self, j, i) for i in range(self.w)] for j in range(self.h)]
+        self.signs = [[False for i in range(self.w)] for j in range(self.h)]
+
+        for x in range(self.w):
+            for y in range(self.h):
+                self.buttons[x][y] = Button(self.frame,
+                                            textvariable=self.vars[x][y],
+                                            command=self.units[x][y].click,
+                                            relief='groove',
+                                            bd=1,
+                                            font=self.font_unit,
+                                            width=3, height=1,
+                                            activebackground='black',
+                                            bg='snow')
+                self.buttons[x][y].bind("<Button-3>", self.units[x][y].right_click)
+                self.buttons[x][y].grid(row=y, column=x)
+
+        self.refresh()
+
+    def time_loop(self):
+        while self.stated is True:
+            try:
+                time.sleep(1)
+                self.time = self.time + 1
+                self.var_time.set("%03d" % self.time)
+            except Exception as e:
+                print(e)
+                continue
+
     def refresh(self):
         for x in range(self.w):
             for y in range(self.h):
@@ -200,10 +252,19 @@ class MineUi:
                     self.vars[x][y].set(self.CODE[self.mine.map[x][y]])
                 else:
                     self.vars[x][y].set(self.CODE[-2])
+                if self.win is True:
+                    if self.signs[x][y] is True:
+                        if self.mine.map[x][y] == -1:
+                            self.buttons[x][y].configure(bg='green')
+                        else:
+                            self.buttons[x][y].configure(bg='red')
+                    if self.mine.map[x][y] == -1:
+                        self.vars[x][y].set(self.CODE[self.mine.map[x][y]])
 
     def restart(self):
-        self.root.destroy()
-        self.__init__(w=self.w, h=self.h, n=self.n)
+        # self.root.destroy()
+        # self.__init__(Tk(), w=self.w, h=self.h, n=self.n)
+        self.init_data()
 
 
 class MineUnit:
@@ -214,6 +275,8 @@ class MineUnit:
     def click(self):
         if self.ui.win is not None:
             return
+        if self.ui.win is None and self.ui.stated is False:
+            self.start_timer()
         res = self.ui.mine.dig(self.x, self.y)
         # You lost
         if res is True:
@@ -224,18 +287,19 @@ class MineUnit:
                         self.ui.mine.dis[x][y] = True
                         self.ui.buttons[x][y].configure(bg='red')
             self.ui.win = False
+            self.ui.var_face.set("L")
+            self.ui.stated = False
+            self.ui.refresh()
+            return
 
         if self.ui.mine.win():
             self.ui.win = True
+            self.ui.var_face.set("J")
+            self.ui.stated = False
+            self.ui.refresh()
+            return
 
-        sumi = 0
-        for x in range(self.ui.w):
-            sumi = sumi + self.ui.signs[x].count(True)
-        if sumi == self.ui.n:
-            for x in range(self.ui.w):
-                for y in range(self.ui.h):
-                    if self.ui.signs[x][y] is True and self.ui.mine.map[x][y] == -1:
-                        self.ui.win = True
+        self.right_judge()
 
         self.ui.refresh()
 
@@ -248,9 +312,64 @@ class MineUnit:
         else:
             self.ui.signs[self.x][self.y] = False
             self.ui.buttons[self.x][self.y].configure(bg='snow')
+        self.right_judge()
+
+    def right_judge(self):
+        sumi = 0
+        for x in range(self.ui.w):
+            sumi = sumi + self.ui.signs[x].count(True)
+        if sumi == self.ui.n:
+            flag = True
+            for x in range(self.ui.w):
+                if flag is True:
+                    for y in range(self.ui.h):
+                        if self.ui.signs[x][y] is True and self.ui.mine.map[x][y] != -1:
+                            flag = False
+                            break
+            if flag is True:
+                self.ui.win = True
+                self.ui.var_face.set("J")
+                self.ui.stated = False
+                self.ui.refresh()
+                return
+
+    def start_timer(self):
+        if self.ui.thread is not None:
+            return
+        self.ui.thread = threading.Thread(target=self.ui.time_loop)
+        self.ui.thread.setDaemon(True)
+        self.ui.stated = True
+        self.ui.thread.start()
+
+
+class ConfigUi:
+    def __init__(self, root):
+        self.root = root
+        self.frame = Frame(self.root)
+        self.vars = [StringVar() for i in range(3)]
+        self.w = Entry(self.frame, textvariable=self.vars[0])
+        self.h = Entry(self.frame, textvariable=self.vars[1])
+        self.n = Entry(self.frame, textvariable=self.vars[2])
+        self.w.insert(0, "15")
+        self.h.insert(0, "15")
+        self.n.insert(0, "10")
+        Label(self.frame, text="宽度").grid(row=0, column=0)
+        Label(self.frame, text="高度").grid(row=1, column=0)
+        Label(self.frame, text="雷数").grid(row=2, column=0)
+        self.w.grid(row=0, column=1)
+        self.h.grid(row=1, column=1)
+        self.n.grid(row=2, column=1)
+        Button(self.frame, text='开始',
+               command=lambda: (self.frame.destroy(),
+                                MineUi(self.root, w=int(self.vars[0].get()), h=int(self.vars[1].get()), n=int(self.vars[2].get()))))\
+            .grid(row=3, columnspan=2, sticky=W+E)
+        self.frame.grid()
 
 
 if __name__ == '__main__':
-    ui = MineUi(w=20, h=20, n=99)
-    ui.root.mainloop()
+    # ui = MineUi(Tk(), w=20, h=20, n=5)
+    # ui.root.mainloop()
+    _root = Tk()
+    cui = ConfigUi(_root)
+    cui.root.mainloop()
 
