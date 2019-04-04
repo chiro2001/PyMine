@@ -156,7 +156,7 @@ class MineUi:
 
         self.CODE_MINE = '۞'
         self.CODE_BLANK = ''
-        self.CODE_CHECKED = '•'
+        self.CODE_CHECKED = ''
         self.CODE = {
             -2: self.CODE_BLANK,
             -1: self.CODE_MINE,
@@ -168,7 +168,7 @@ class MineUi:
         self.COLORS = {
             -2: 'snow',
             -1: 'Black',
-            0: 'gray',
+            0: 'LightGrey',
             1: 'Peru',
             2: 'DarkGoldenrod',
             3: 'OrangeRed',
@@ -267,6 +267,8 @@ class MineUi:
 
                 if self.mine.dis[x][y] is True:
                     self.vars[x][y].set(self.CODE[self.mine.map[x][y]])
+                    if self.mine.map[x][y] == 0:
+                        self.buttons[x][y].configure(bg=self.COLORS[self.mine.map[x][y]])
                 else:
                     self.vars[x][y].set(self.CODE[-2])
                 if self.win is True:
