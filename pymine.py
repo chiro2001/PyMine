@@ -132,6 +132,7 @@ class MineUi:
         self.root = root
         self.root.resizable(width=False, height=False)
         # self.root.attributes("-toolwindow", 1)
+        self.root.attributes('-alpha', 0.9)
         self.root.title("PyMine - 扫雷")
 
         # 检查字体环境
@@ -186,7 +187,7 @@ class MineUi:
         self.font_unit = tkFont.Font(family='Consolas', size=9, weight=tkFont.NORMAL)
 
         Label(self.root, textvariable=self.var_time, font=self.font_num).grid(row=0, column=0)
-        Button(self.root, textvariable=self.var_face, font=self.font_face, command=self.restart).grid(row=0, column=1)
+        Button(self.root, textvariable=self.var_face, font=self.font_face, command=self.restart, relief='groove',).grid(row=0, column=1)
         Label(self.root, textvariable=self.var_num, font=self.font_num).grid(row=0, column=2)
 
         self.frame = Frame(self.root)
