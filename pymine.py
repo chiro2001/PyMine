@@ -148,7 +148,7 @@ class MineUi:
 
         # 检查字体环境
         if '5x5 Dots' not in tkFont.families():
-            res = load_font(resource_path('5x5dots.ttf'))
+            res = load_font(resource_path(os.path.join('font', '5x5dots.ttf')))
             if not res:
                 print("字体安装失败")
                 exit(1)
