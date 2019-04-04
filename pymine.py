@@ -164,6 +164,20 @@ class MineUi:
         for i in range(1, 10):
             self.CODE[i] = "%d" % i
 
+        self.COLORS = {
+            -2: 'snow',
+            -1: 'Black',
+            0: 'gray',
+            1: 'Peru',
+            2: 'DarkGoldenrod',
+            3: 'OrangeRed',
+            4: 'RosyBrown',
+            5: 'LightSeaGreen',
+            6: 'Aqua',
+            7: 'SpringGreen',
+            8: 'Lime',
+        }
+
         self.signs = [[False for i in range(self.w)] for j in range(self.h)]
 
         # 笑脸J， 哭脸L，面瘫脸K
@@ -190,7 +204,7 @@ class MineUi:
                                             bd=1,
                                             font=self.font_unit,
                                             width=3, height=1,
-                                            activebackground='black',
+                                            activebackground='gray',
                                             bg='snow')
                 self.buttons[x][y].bind("<Button-3>", self.units[x][y].right_click)
                 self.buttons[x][y].grid(row=y, column=x)
@@ -228,7 +242,7 @@ class MineUi:
                                             bd=1,
                                             font=self.font_unit,
                                             width=3, height=1,
-                                            activebackground='black',
+                                            activebackground='gray',
                                             bg='snow')
                 self.buttons[x][y].bind("<Button-3>", self.units[x][y].right_click)
                 self.buttons[x][y].grid(row=y, column=x)
@@ -248,6 +262,8 @@ class MineUi:
     def refresh(self):
         for x in range(self.w):
             for y in range(self.h):
+                self.buttons[x][y].configure(fg=self.COLORS[self.mine.map[x][y]])
+
                 if self.mine.dis[x][y] is True:
                     self.vars[x][y].set(self.CODE[self.mine.map[x][y]])
                 else:
