@@ -12,11 +12,11 @@ FR_NOT_ENUM = 0x20
 
 # https://stackoverflow.com/questions/11993290/truly-custom-font-in-tkinter
 def load_font(fontpath, private=True, enumerable=False):
-    if isinstance(fontpath, str):
+    if isinstance(fontpath, bytes):
         pathbuf = create_string_buffer(fontpath)
         AddFontResourceEx = windll.gdi32.AddFontResourceExA
     # elif isinstance(fontpath, unicode):
-    elif isinstance(fontpath, bytes):
+    elif isinstance(fontpath, str):
         pathbuf = create_unicode_buffer(fontpath)
         AddFontResourceEx = windll.gdi32.AddFontResourceExW
     else:
@@ -69,6 +69,10 @@ class Mine:
             return False
         if self.map[x][y] == -1:
             return True
+        # 挖到数字，只挖这个数字
+        if self.map[x][y] != 0:
+            self.dis[x][y] = True
+            return False
         self.digging(x, y)
         return False
 
@@ -101,13 +105,21 @@ class Mine:
         a = np.array(self.map)
         for search in searched:
             ix, iy = search
-            low = (max(0, ix - 1), max(0, iy - 1))
+            low = max(0, ix - 1), max(0, iy - 1)
             s = a[low[0]:ix + 2, low[1]:iy + 2]
             for ii in range(s.shape[0]):
                 for ij in range(s.shape[1]):
-                    if self.map[ii + ix][ij + iy] != -1:
-                        self.dis[ii + ix][ij + iy] = True
+                    tx, ty = ii + ix - 1, ij + iy - 1
+                    if 0 <= tx and tx < self.w and 0 <= ty and ty < self.h \
+                            and self.map[tx][ty] != -1 and self.map[tx][ty] != 0:
+                        self.dis[tx][ty] = True
 
+    def win(self):
+        for x in range(self.w):
+            for y in range(self.h):
+                if self.map[x][y] == -1 and self.dis[x][y] is False:
+                    return False
+        return True
 
 class MineUi:
     def __init__(self, w=10, h=10, n=10):
@@ -120,35 +132,125 @@ class MineUi:
         self.root.title("PyMine - 扫雷")
 
         # 检查字体环境
-        # if '5x5 Dots' not in tkFont.families():
-        if '42' not in tkFont.families():
-            # res = load_font('5x5dots.ttf')
-            res = load_font('42.ttf')
+        if '5x5 Dots' not in tkFont.families():
+            res = load_font('5x5dots.ttf')
             if not res:
                 print("字体安装失败")
                 exit(1)
-            print("字体安装成功")
 
+        # 配置可变变量和常量
         self.var_time = StringVar()
         self.var_num = StringVar()
         self.var_face = StringVar()
         self.var_num.set("%03d" % self.n)
         self.var_time.set("000")
         self.var_face.set("J")
+        self.win = None
+
+        self.CODE_MINE = '۞'
+        self.CODE_BLANK = ''
+        self.CODE_CHECKED = '•'
+        self.CODE = {
+            -2: self.CODE_BLANK,
+            -1: self.CODE_MINE,
+            0: self.CODE_CHECKED,
+        }
+        for i in range(1, 10):
+            self.CODE[i] = "%d" % i
+
+        self.signs = [[False for i in range(self.w)] for j in range(self.h)]
 
         # 笑脸J， 哭脸L
-        self.font_face = tkFont.Font(family='Wingdings', size=12, weight=tkFont.NORMAL)
-        # self.font_num = tkFont.Font(family='5x5 Dots', size=24, weight=tkFont.NORMAL)
-        self.font_num = tkFont.Font(family='42', size=24, weight=tkFont.NORMAL)
+        self.font_face = tkFont.Font(family='Wingdings', size=15, weight=tkFont.NORMAL)
+        self.font_num = tkFont.Font(family='5x5 Dots', size=24, weight=tkFont.NORMAL)
+        self.font_unit = tkFont.Font(family='Consolas', size=12, weight=tkFont.NORMAL)
 
         Label(self.root, textvariable=self.var_time, font=self.font_num).grid(row=0, column=0)
-        Button(self.root, textvariable=self.var_face, font=self.font_face).grid(row=0, column=1)
+        Button(self.root, textvariable=self.var_face, font=self.font_face, command=self.restart).grid(row=0, column=1)
         Label(self.root, textvariable=self.var_num, font=self.font_num).grid(row=0, column=2)
 
-        print(tkFont.families())
+        self.frame = Frame(self.root)
+
+        self.vars = [[StringVar() for i in range(self.w)] for j in range(self.h)]
+        self.buttons = [[None for i in range(self.w)] for j in range(self.h)]
+        self.units = [[MineUnit(self, j, i) for i in range(self.w)] for j in range(self.h)]
+
+        for x in range(self.w):
+            for y in range(self.h):
+                self.buttons[x][y] = Button(self.frame,
+                                            textvariable=self.vars[x][y],
+                                            command=self.units[x][y].click,
+                                            relief='groove',
+                                            bd=1,
+                                            font=self.font_unit,
+                                            width=3, height=1,
+                                            activebackground='black',
+                                            bg='snow')
+                self.buttons[x][y].bind("<Button-3>", self.units[x][y].right_click)
+                self.buttons[x][y].grid(row=y, column=x)
+
+        self.frame.grid(row=1, columnspan=3)
+
+        self.refresh()
+
+    def refresh(self):
+        for x in range(self.w):
+            for y in range(self.h):
+                if self.mine.dis[x][y] is True:
+                    self.vars[x][y].set(self.CODE[self.mine.map[x][y]])
+                else:
+                    self.vars[x][y].set(self.CODE[-2])
+
+    def restart(self):
+        self.root.destroy()
+        self.__init__(w=self.w, h=self.h, n=self.n)
+
+
+class MineUnit:
+    def __init__(self, ui_: MineUi, x: int, y: int):
+        self.ui = ui_
+        self.x, self.y = x, y
+
+    def click(self):
+        if self.ui.win is not None:
+            return
+        res = self.ui.mine.dig(self.x, self.y)
+        # You lost
+        if res is True:
+            # self.ui.mine.dis = [[True for i in range(self.ui.w)] for j in range(self.ui.h)]
+            for x in range(self.ui.w):
+                for y in range(self.ui.h):
+                    if self.ui.mine.map[x][y] == -1:
+                        self.ui.mine.dis[x][y] = True
+                        self.ui.buttons[x][y].configure(bg='red')
+            self.ui.win = False
+
+        if self.ui.mine.win():
+            self.ui.win = True
+
+        sumi = 0
+        for x in range(self.ui.w):
+            sumi = sumi + self.ui.signs[x].count(True)
+        if sumi == self.ui.n:
+            for x in range(self.ui.w):
+                for y in range(self.ui.h):
+                    if self.ui.signs[x][y] is True and self.ui.mine.map[x][y] == -1:
+                        self.ui.win = True
+
+        self.ui.refresh()
+
+    def right_click(self, argv):
+        if self.ui.win is not None:
+            return
+        if self.ui.signs[self.x][self.y] is False:
+            self.ui.signs[self.x][self.y] = True
+            self.ui.buttons[self.x][self.y].configure(bg='blue')
+        else:
+            self.ui.signs[self.x][self.y] = False
+            self.ui.buttons[self.x][self.y].configure(bg='snow')
 
 
 if __name__ == '__main__':
-    ui = MineUi(w=10, h=10, n=10)
+    ui = MineUi(w=20, h=20, n=99)
     ui.root.mainloop()
 
