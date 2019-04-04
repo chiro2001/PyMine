@@ -6,6 +6,17 @@ import queue
 import copy
 import time
 import threading
+import sys
+import os
+
+#生成资源文件目录访问路径
+def resource_path(relative_path):
+    if getattr(sys, 'frozen', False): #是否Bundle Resource
+        base_path = sys._MEIPASS
+    else:
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
+
 
 from ctypes import windll, byref, create_unicode_buffer, create_string_buffer
 FR_PRIVATE = 0x10
@@ -137,7 +148,7 @@ class MineUi:
 
         # 检查字体环境
         if '5x5 Dots' not in tkFont.families():
-            res = load_font('5x5dots.ttf')
+            res = load_font(resource_path('5x5dots.ttf'))
             if not res:
                 print("字体安装失败")
                 exit(1)
